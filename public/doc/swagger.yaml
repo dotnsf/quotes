@@ -1,0 +1,226 @@
+swagger: '2.0'
+info:
+  description: Quotes API ドキュメント
+  version: 0.0.1
+  title: Quotes Platform REST APIs
+host: localhost:6008
+basePath: /
+tags:
+  - name: document
+    description: 学習データ用 APIs
+  - name: cognitive
+    description: コグニティブ APIs
+schemes:
+  - http
+  - https
+paths:
+  /document/{id}:
+    get:
+      tags:
+        - document
+      summary: 指定した１つのデータを取りだす
+      description: \{id\} で指定したドキュメント id のデータを一件取りだす
+      parameters:
+        - name: id
+          type: string
+          in: path
+          description: ドキュメント id
+          required: true
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+    delete:
+      tags:
+        - document
+      summary: 指定した１つのデータを削除する
+      description: \{id\} で指定したドキュメント id のデータを一件削除する
+      parameters:
+        - name: id
+          type: string
+          in: path
+          description: ドキュメント id
+          required: true
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /documents:
+    get:
+      tags:
+        - document
+      summary: データの複数件取得
+      description: 格納されているデータを複数件取得する
+      produces:
+        - application/json
+      parameters:
+        - name: limit
+          type: string
+          in: query
+          description: 取りだす件数（無指定時は全件）
+        - name: offset
+          type: string
+          in: query
+          description: 取りだす際のオフセット（無指定時は0）
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+    delete:
+      tags:
+        - document
+      summary: 複数データ削除
+      description: データベース内の複数(または全)データを削除する
+      produces:
+        - application/json
+      parameters:
+        - name: docs
+          in: body
+          schema:
+            $ref: '#/definitions/DocsRequest'
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /query:
+    get:
+      tags:
+        - document
+      summary: データベース内のデータを検索する
+      description: データベース内のデータを分類やキーワードで検索する
+      produces:
+        - application/json
+      parameters:
+        - name: category
+          type: string
+          in: query
+          description: 分類
+        - name: quote
+          type: string
+          in: query
+          description: 名言
+        - name: limit
+          type: string
+          in: query
+          description: 取りだす件数（無指定時は全件）
+        - name: offset
+          type: string
+          in: query
+          description: 取りだす際のオフセット（無指定時は0）
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /uploadTSV:
+    post:
+      tags:
+        - document
+      summary: 学習データをアップロードしてデータベースに追加する
+      description: 学習データをアップロードしてデータベースに追加する
+      produces:
+        - application/json
+      consumes:
+        - multipart/form-data
+      parameters:
+        - name: file
+          in: formData
+          type: file
+          required: true
+          description: 学習データとなる TSV ファイル
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /reset:
+    post:
+      tags:
+        - document
+      summary: 注意！：学習データベースをリセット
+      description: 注意！：学習データベース内の全学習データを削除（学習内容はそのまま）
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /classify:
+    post:
+      tags:
+        - cognitive
+      summary: テキストを分類する
+      description: Watson NLC に学習済みのコーパスを使ってテキストを分類する
+      produces:
+        - application/json
+      parameters:
+        - name: text
+          in: formData
+          type: string
+          required: true
+          description: 分類したいテキスト
+        - name: idx
+          in: formData
+          type: string
+          description: 1(デフォルト) = コーパス１を使用, 2 = コーパス2を使用
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /trainingNLC:
+    get:
+      tags:
+        - cognitive
+      summary: Watson NLC の学習状況を確認する
+      description: Watson NLC の学習状況を確認する
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+    post:
+      tags:
+        - cognitive
+      summary: Watson NLC の（再）学習を開始する
+      description: 現在のデータベースの内容を使って、Watson NLC の（再）学習を開始する
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+    delete:
+      tags:
+        - cognitive
+      summary: Watson NLC コーパスを削除する
+      description: 学習済み（或いは学習中）の Watson NLC コーパスを削除する
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+definitions:
+  DocsRequest:
+    type: array
+    items:
+      $ref: '#/definitions/DocRequest'
+  DocRequest:
+    type: object
+    properties:
+      _id:
+        type: string
+        description: ドキュメント id
+      _rev:
+        type: string
+        description: ドキュメントリビジョン

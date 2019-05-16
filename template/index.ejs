@@ -1,0 +1,671 @@
+<html>
+<head>
+  <meta charset="utf8"/>
+  <title><%= settings.appname %></title>
+  <script type="text/javascript" src="//code.jquery.com/jquery-2.0.3.min.js"></script>
+  <link href="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet"/>
+  <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+  <script src="/js/cvi_busy_lib.js"></script>
+  <script src="/js/common.js"></script>
+  <script>
+  var doc_category = '';
+  //var doc_q = '';
+  var doc_page = 0;
+
+  var doc_limit = <%= settings.doc_limit %>;         //. 学習データ一覧の一画面に表示する学習データレコード数
+  var max_target_nums = <%= settings.max_target_nums %>;   //. 課題に対する目標を最大いくつ調べるか？
+
+  var assess_answers_c = [];
+  var assess_answers_d = [];
+  var assess_answers_e = [];
+
+  $(function(){
+    getDocuments();
+    trainingStatus();
+
+    $( '#file1' ).on( 'change', function(){
+      var input = $(this);
+      var numFiles = input.get(0).files ? input.get(0).files.length : 1;
+      var label = input.val().replace( /\\/g, '/' ).replace( /.*\//, '' );
+      input.parent().next( ':text' ).val( label );
+      $('#uploadAssessment').prop( 'disabled', ( label == '' ) );
+    });
+    $( '#file3' ).on( 'change', function(){
+      var input = $(this);
+      var numFiles = input.get(0).files ? input.get(0).files.length : 1;
+      var label = input.val().replace( /\\/g, '/' ).replace( /.*\//, '' );
+      input.parent().next( ':text' ).val( label );
+      $('#uploadXLS2btn').prop( 'disabled', ( label == '' ) );
+    });
+
+    $( '#resetdata' ).on( 'change', function(){
+      var checked = $(this).prop( 'checked' );
+      if( checked ){
+        window.alert( 'このチェックボックスを ON にしたままロードすると、現在のデータベースの内容はリセットされ、指定された学習ファイルの中身だけが記録されます。注意してください。' );
+      }
+    });
+
+    $( '#myModal').on( 'hidden.bs.modal', function(){
+      $('.li_selected').each( function( index, element ){
+        var text = $(element).text();
+        var tmp = $(element).prop( 'id' ).split( '_' );  //. 'li_address_G01_0_1' から 'address_G01' 部分を抜き出す
+        //console.log( tmp );
+        if( tmp.length > 4 ){
+          var _id = tmp[1] + '_' + tmp[2];
+
+          $('#_table_'+_id).append( '<li>' + text + '</li>' );
+        }
+      });
+    });
+  });
+
+  function getDocuments(){
+    $('#documents_table_tbody').html( '' );
+    $('#documents_nav').html( '' );
+    var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+    $.ajax({
+      type: 'GET',
+      url: '/documents?limit=' + doc_limit + '&offset=' + ( doc_limit * doc_page ) + ( doc_category ? '&category=' + doc_category : '' ),
+      success: function( result ){
+        obj.remove();
+        //console.log( result );
+        if( result.status ){
+          var total = result.total;
+          var limit = result.limit;
+          var offset = result.offset;
+          var documents = result.docs;
+          documents.forEach( function( doc ){
+            //console.log( doc );  //. { _id: '_id', _rev: '_rev', timestamp: NN, task: 'xxx', target: 'yyy', category: 'zzz', .. }
+
+            var tr = '<tr>'
+              + '<td><input class="form-control ddoc" type="checkbox" id="doc_' + doc._id + '_' + doc._rev + '"/></td>'
+              + '<td>' + doc.task + '</td>'
+              + '<td>' + doc.target + '</td>'
+              + '<td>' + doc.category + '</td>'
+              + '<td>' + timestamp2datetime( doc.timestamp ) + '</td>'
+              + '</tr>';
+            $('#documents_table_tbody').append( tr );
+          });
+
+          //. Navigation
+          if( total > 0 ){
+            var start = ( offset + 1 );
+            var end = ( ( offset + limit ) > total ? total : ( offset + limit ) );
+
+            var table = '<table class="table">'
+              + '<tr>'
+              + '<td style="text-align:left;" id="document_prev">&lt;&lt;</td>'
+              + '<td style="text-align:center;">' + ( offset + 1 ) + ( start < end ? ( ' - ' + end ) : '' ) + ' / ' + total + '</td>'
+              + '<td style="text-align:right;" id="document_next">&gt;&gt;</td>'
+              + '</tr>'
+              + '</table>';
+            $('#documents_nav').append( table );
+            enablePrev( ( doc_page > 0 ) );
+            enableNext( ( documents.length == doc_limit ) );
+          }
+        }
+      },
+      error: function( err ){
+        obj.remove();
+        console.log( err );
+      }
+    });
+  }
+
+  function enablePrev( b ){
+    if( b ){
+      $('#document_prev').css( 'color', '#008' );
+      $('#document_prev').css( 'cursor', 'pointer' );
+      $('#document_prev').click( function(){
+        doc_page --;
+        getDocuments();
+      });
+    }else{
+      $('#document_prev').css( 'color', '#ccc' );
+      $('#document_prev').css( 'cursor', 'default' );
+      $('#document_prev').click( function(){
+      });
+    }
+  }
+
+  function enableNext( b ){
+    if( b ){
+      $('#document_next').css( 'color', '#008' );
+      $('#document_next').css( 'cursor', 'pointer' );
+      $('#document_next').click( function(){
+        doc_page ++;
+        getDocuments();
+      });
+    }else{
+      $('#document_next').css( 'color', '#ccc' );
+      $('#document_next').css( 'cursor', 'default' );
+      $('#document_next').click( function(){
+      });
+    }
+  }
+
+  function uploadXLS2(){
+    var resetdata = $('#resetdata').prop( 'checked' );
+    var form = $('#frm3').get()[0];
+    var data = new FormData( form );
+    if( resetdata ){
+      data.resetdata = 1;
+    }else{
+      data.resetdata = 0;
+    }
+    console.log( data );
+    var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+    $.ajax({
+      type: 'POST',
+      url: '/uploadXLS2',
+      data: data,
+      processData: false,
+      contentType: false,
+      dataType: 'json',
+      success: function( data ){
+        obj.remove();
+        //console.log( data );
+        getDocuments();
+      },
+      error: function( jqXHR, textStatus, errorThrown ){
+        obj.remove();
+        console.log( 'uploadXLS2: error' );
+        console.log( textStatus );
+        console.log( errorThrown );
+      }
+    });
+
+    return false;
+  }
+
+  function uploadAssessment(){
+    //console.log( 'uploadAssessment' );
+    $('#resultAssessment').html( '' );
+    assess_answers_c = [];
+    assess_answers_d = [];
+    assess_answers_e = [];
+    var form = $('#frm1').get()[0];
+    var data = new FormData( form );
+    var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+    $.ajax({
+      type: 'POST',
+      url: '/uploadAssessment',
+      data: data,
+      processData: false,
+      contentType: false,
+      dataType: 'json',
+      success: function( data ){
+        obj.remove();
+        //console.log( data ); // { status: true, wishes: wishes }
+        if( data.status ){
+          assess_answers_c = data.answers_c;
+          assess_answers_d = data.answers_d;
+          assess_answers_e = data.answers_e;
+          var table = '<table class="table table-bordered table-striped"><tr><th>セル位置</th><th width="40%">解決すべき課題</th><th>&nbsp;</th><th width="40%">支援目標</th></tr>';
+          data.wishes.forEach( function( wish ){
+            //console.log( wish ); // { sheetname: sheetname, address: address, word: w }
+
+            var tr = '<tr>'
+              + '<td>' + wish.address + '</td>'
+              + '<td class="wishes" id="address_' + wish.address + '">' + wish.word
+
+              + '<br/><table border="0" id="table_address_' + wish.address + '"><tbody id="tbody_address_' + wish.address + '" class="li_selected"></tbody></table>'
+
+              + '</td>'
+              + '<td><a href="#" class="btn btn-detault" data-toggle="modal" data-target="#myModal" onClick="classify(\'' + wish.address + '\', \'' + wish.word + '\');"><img src="/imgs/watson.png" width="30" height="30"/></a></td>'
+              + '<td class="targets"><ul id="_table_address_' + wish.address + '">'
+              + '</ul></td>'
+              + '</tr>';
+            table += tr;
+          });
+          table += '</table>';
+
+          table += '<div style="text-align: center;"><input id="downloadAsXLS" type="button" class="btn btn-info" value="エクセルファイルでダウンロード" onClick="downloadAsXLS();"/></div>';
+
+          $('#resultAssessment').html( table );
+        }
+      },
+      error: function( jqXHR, textStatus, errorThrown ){
+        obj.remove();
+        console.log( 'uploadAssessment: error' );
+        console.log( textStatus );
+        console.log( errorThrown );
+      }
+    });
+
+    return false;
+  }
+
+
+  function deleteSelected(){
+    if( window.confirm( '選択したデータを削除します。よろしいですか？' ) ){
+      var docs = [];
+      $('input.ddoc:checked').each( function(){
+        var id = $(this).prop( 'id' );
+        var tmp = id.split( '_' );
+        if( tmp.length == 3 ){
+          var _id = tmp[1];
+          var _rev = tmp[2];
+          var doc = { _id: _id, _rev: _rev };
+          docs.push( doc );
+        }
+      });
+
+      //console.log( docs );
+      if( docs && docs.length ){
+        var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+        $.ajax({
+          type: 'DELETE',
+          url: '/documents',
+          data: { docs: docs },
+          success: function( data ){
+            obj.remove();
+            //console.log( data );
+            getDocuments();
+          },
+          error: function( jqXHR, textStatus, errorThrown ){
+            obj.remove();
+            console.log( textStatus );
+            console.log( errorThrown );
+          }
+        });
+      }
+    }
+  }
+
+  function training(){
+    if( window.confirm( '現在のデータを使って学習データを更新します。よろしいですか？' ) ){
+      var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+      $.ajax({
+        type: 'POST',
+        url: '/trainingNLC',
+        success: function( data ){
+          obj.remove();
+          console.log( data );
+          trainingStatus();
+        },
+        error: function( jqXHR, textStatus, errorThrown ){
+          obj.remove();
+          console.log( textStatus );
+          console.log( errorThrown );
+        }
+      });
+    }
+  }
+
+  function trainingStatus(){
+    $('#nlc_status').html( '<input type="button" id="status_button" class="btn" value="学習ステータス確認中.." onClick="trainingStatus();"/>' );
+    $('#assessment_div').css( "display", "none" );
+    var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+    $.ajax({
+      type: 'GET',
+      url: '/trainingNLC',
+      success: function( data ){
+        obj.remove();
+        //console.log( data );
+        if( data.status ){
+          //console.log( data.body ); //. { classifier_id: "classifier_id", created: "created", status: "Training", .. }
+          var status_message = '&nbsp;<input type="button" class="btn btn-info" value="学習ステータス確認" onClick="trainingStatus();"/>';
+          var status_message1 = data.body1.status;
+          var status_message2 = data.body2.status;
+          if( status_message1 == 'Available' && status_message2 == 'Available' ){
+            $('#status_button').addClass( "btn-success" );
+            $('#status_button').val( "問い合わせ可能" );
+            //$('#status_button').css( "display", "none" );
+            $('#assessment_div').css( "display", "block" );
+          }else if( status_message1 == 'Available' || status_message2 == 'Available' ){
+            $('#status_button').addClass( "btn-info" );
+            $('#status_button').val( "学習中..." );
+          }else{
+            $('#status_button').addClass( "btn-warning" );
+            $('#status_button').val( "学習中.." );
+          }
+        }else{
+          $('#status_button').addClass( "btn-danger" );
+          $('#status_button').val( "学習記録なし" );
+        }
+      },
+      error: function( jqXHR, textStatus, errorThrown ){
+        obj.remove();
+        console.log( textStatus );
+        console.log( errorThrown );
+
+        $('#status_button').addClass( "btn-danger" );
+        $('#status_button').val( "学習記録なし" );
+      }
+    });
+  }
+
+  function classify( address, word ){
+    var id = 'address_' + address;
+    var text = word;
+    //$('#tbody_'+id).html( '' );
+    $('#_table_'+id).html( '' );
+    $('#task_list').html( '' );
+    $('#class_name').html( '' );
+
+    if( !text ){
+      text = $('#edit_wish').val();
+    }
+
+    if( text ){
+      $('#myModalLabel').html( text );
+
+      var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+      $.ajax({
+        type: 'POST',
+        url: '/classify',
+        data: { text: text },
+        success: function( data ){
+          obj.remove();
+          if( data.status ){
+            console.log( 'POST /classify' );
+            //console.log( data.classes );  //. [ { class_name: 'class_name', confidence: 0.98 }, { .. }, .. ]
+            if( data.classes.length > 0 ){
+              var target_texts = [];
+              data.classes.forEach( function( top ){
+                var top_class_name = top.class_name;  //. '健康'
+                var top_confidence = top.confidence;  //. 0.9814..
+
+                if( top_confidence > 0 ){
+                  //. text と似た課題を探し、同一カテゴリであれば候補とする
+                  $.ajax({
+                    type: 'POST',
+                    url: '/classify',
+                    data: { text: text, idx: '2' },
+                    success: function( data2 ){
+                      //obj.remove();
+                      if( data2.status ){
+                        var tasks = [];
+                        //console.log( data2.classes );  //. [ { class_name: 'class_name', confidence: 0.98 }, { .. }, .. ]
+                        if( data2.classes.length > 0 ){
+                          if( max_target_nums > 0 && data2.classes.length > max_target_nums ){
+                            data2.classes = data2.classes.slice( 0, max_target_nums );
+                          }
+
+                          data2.classes.forEach( function( top2 ){
+                            var top2_class_name = top2.class_name;  //. '健康_XXXtaskXXX'
+                            var top2_confidence = top2.confidence;  //. 0.9814..
+
+                            if( top2_confidence == 1 || top2_class_name.indexOf( top_class_name ) == 0 ){
+                              //var task = top2_class_name.substr( top_class_name.length + 1 );
+                              var idx = top2_class_name.indexOf( '_' );
+                              var cat = top2_class_name.substr( 0, idx );
+                              var task = top2_class_name.substr( idx + 1 );
+                              //console.log( ' cat = ' + cat + ', task = ' + task );
+                              $.ajax({
+                                type: 'GET',
+                                url: '/query?category=' + cat + '&task=' + task,
+                                success: function( data3 ){
+                                  if( data3 && data3.docs && data3.docs.length ){
+                                    data3.docs.forEach( function( t ){
+                                      var target = t.target;
+                                      var _target = sanitizeForPattern2( target );
+                                      if( target_texts.indexOf( _target ) == -1 ){
+                                        var task = t.task;
+                                        var _task = sanitizeForPattern2( task );
+
+                                        var _li = '<li id="li_' + id + '_' + task + '_' + target + '" class="task-list-item list-group-item" onClick="selectTargetItem(\'' + id + '_' + task + '_' + target + '\', \'' + target + '\')"><a class="nounderline tooltip-test" href="#" title="' + top2_confidence + '">' + target + '</a></li>';
+                                        //$('#task_list').append( _li );
+
+                                        //. confidence 順にソート
+                                        var b = true;
+                                        var lis = $('#task_list')[0].childNodes;
+                                        for( var l = 0; l < lis.length && b; l ++ ){
+                                          var li = lis[l];
+                                          var li_a = li.childNodes[0];
+                                          var attrs = li_a.attributes;
+                                          var li_a_title = attrs.getNamedItem( 'title' );
+                                          if( li_a_title ){
+                                            var cf = parseFloat( li_a_title.nodeValue );
+                                            //console.log( 'cf = ' + cf );
+                                            if( cf < top2_confidence ){
+                                              $(li).before( _li );
+                                              b = false;
+                                            }
+                                          }
+                                        }
+                                        if( b ){
+                                          $('#task_list').append( _li );
+                                        }
+
+                                        target_texts.push( _target );
+                                      }
+                                    });
+                                  }
+                                },
+                                error: function( jqXHR, textStatus, errorThrown ){
+                                  //console.log( textStatus );
+                                  //console.log( errorThrown );
+                                }
+                              });
+                            }
+                          });
+                        }
+                      }
+                    },
+                    error: function( jqXHR, textStatus, errorThrown ){
+                      obj.remove();
+                      console.log( textStatus );
+                      console.log( errorThrown );
+                    }
+                  });
+                }
+              });
+            }
+          }
+        },
+        error: function( jqXHR, textStatus, errorThrown ){
+          obj.remove();
+          console.log( textStatus );
+          console.log( errorThrown );
+        }
+      });
+    }else{
+      //. 希望未入力
+    }
+  }
+
+  function selectTargetItem( id, target ){
+    if( id.split( '_' ).length > 3 ){
+      $('#li_'+id).toggleClass( 'li_selected' );
+    }
+  }
+
+  function downloadAsXLS(){
+    var tasks_targets = [];
+    $('.targets ul li').each( function( index, element ){
+      var selected_target = element.firstChild.nodeValue;
+
+      var selected_task = element.parentNode.parentNode.parentNode.childNodes[1].firstChild.nodeValue;
+      var task_target = { task: selected_task, target: selected_target };
+      tasks_targets.push( task_target );
+    });
+
+    if( tasks_targets.length > 0 ){
+      var data = { tasks_targets: tasks_targets, answers_c: assess_answers_c, answers_d: assess_answers_d, answers_e: assess_answers_e };
+      //alert( JSON.stringify( data, null, 2 ) );
+      //console.log( data );
+
+      var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+
+      //. jQuery の $.ajax だとバイナリフォーマットのまま取得できないので XMLHttpRequest() を使う
+      var xhr = new XMLHttpRequest();
+      xhr.open( 'POST', '/downloadAsXLS', true );
+      xhr.responseType = 'blob';
+      xhr.onload = function( e ){
+        obj.remove();
+        console.log( 'this.status = ' + this.status );
+        if( this.status == 200 ){
+          var ts = ( new Date() ).getTime();
+          var filename = ts + '.xlsx';
+          if( assess_answers_c && assess_answers_c[2] ){
+            filename = assess_answers_c[2] + '_' + ts + '.xlsx'
+          }
+          var blob = this.response;
+          if( navigator.appVersion.toString().indexOf( '.NET' ) > 0 ){
+            //. IE 10+
+            window.navigator.msSaveBlob( blob, filename );
+          }else{
+            //. <a> タグの生成
+            var a = document.createElement( 'a' );
+
+            //. Blob オブジェクトおよび URL の生成
+            var blobUrl = window.URL.createObjectURL( new Blob( [blob], { type: blob.type } ) );
+
+            //. 動的に生成した <a> タグをドキュメントにアペンド
+            document.body.appendChild( a );
+            a.style = 'display: none;';
+
+            //. URL をセット
+            a.href = blobUrl;
+            a.download = filename;
+
+            //. ダウンロード開始
+            a.click();
+          }
+        }
+      };
+
+      xhr.setRequestHeader( 'Content-Type', 'application/json' );
+      xhr.send( JSON.stringify( data ) );
+    }
+  }
+
+  function timestamp2datetime( ts ){
+    var dt = new Date( ts );
+    var yyyy = dt.getFullYear();
+    var mm = dt.getMonth() + 1;
+    var dd = dt.getDate();
+    var hh = dt.getHours();
+    var nn = dt.getMinutes();
+    var ss = dt.getSeconds();
+    //var datetime = yyyy + '-' + ( mm < 10 ? '0' : '' ) + mm + '-' + ( dd < 10 ? '0' : '' ) + dd
+    //  + ' ' + ( hh < 10 ? '0' : '' ) + hh + ':' + ( nn < 10 ? '0' : '' ) + nn + ':' + ( ss < 10 ? '0' : '' ) + ss;
+    var datetime = yyyy + '年' + ( mm < 10 ? '0' : '' ) + mm + '月' + ( dd < 10 ? '0' : '' ) + dd + '日';
+    return datetime;
+  }
+
+  function sanitizeForPattern2( body ){
+    body = body.split( '、' ).join( '' );
+    body = body.split( '。' ).join( '' );
+
+    return body;
+  }
+  </script>
+  <style>
+  a.nounderline{
+    color: #000;
+    text-decoration: none;
+  }
+  .li_selected{
+    background-color: #fcc;
+  }
+  </style>
+  </head>
+  <body>
+  <nav class="navbar navbar-expand-lg navbar-light index-header">
+    <a href="/" class="navbar-brand"><%= settings.appname %></a>
+    <div class="collapse navbar-collapse target">
+      <ul class="navbar-nav mr-auto">
+      </ul>
+      <ul class="navbar-nav" id="navbar">
+        <li class="nav-item" id="nlc_status">
+          <input type="button" class="btn btn-info" value="学習ステータス確認" onClick="trainingStatus();"/>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container p-3">
+    <ul class="nav nav-tabs">
+      <li class="nav-item"><a href="#tab1" class="nav-link active" data-toggle="tab">計画案ダウンロード</a></li>
+      <li class="nav-item"><a href="#tab2" class="nav-link" data-toggle="tab">学習データ管理</a></li>
+    </ul>
+
+    <div class="tab-content">
+      <div id="tab1" class="tab-pane active">
+        <div id="assessment_div">
+          <table class="table">
+            <tr>
+              <td style="text-align:left;">
+                <form id="frm1" name="frm1" method="POST" action="/uploadAssessment" enctype="multipart/form-data">
+                  <label>
+                    <span class="btn btn-primary">アセスメントシート<input type="file" id="file1" name="file" style="display:none;"/></span>
+                    <input type="text" style="background:#ccc; width:400px;" readonly=""/>
+                  </label>
+                </form>
+              </td>
+              <td style="text-align:right;">
+                <input id="uploadAssessment" type="button" class="btn btn-info" value="アセスメントシート送信" onClick="uploadAssessment();" disabled=""/>
+              </td>
+            </tr>
+          </table>
+        </div>
+        <div id="resultAssessment"></div>
+      </div>
+      <div id="tab2" class="tab-pane">
+        <table class="table">
+          <tr>
+            <td style="text-align:left;">
+              <form id="frm3" name="frm3" enctype="multipart/mixed">
+                <label>
+                  <span class="btn btn-primary">学習データファイル<input type="file" id="file3" name="file" style="display:none;"/></span>
+                  <input type="text" style="background:#ccc; width:200px;" readonly=""/>
+<!--
+                  <input type="checkbox" id="resetdata" value="1"/>現在のデータを全て削除してからインポートする
+-->
+                </label>
+              </form>
+            </td>
+            <td style="text-align:right;">
+              <input id="uploadXLS2btn" type="button" class="btn btn-info" value="学習データ送信" onClick="uploadXLS2();" disabled=""/>
+            </td>
+          </tr>
+        </table>
+
+        <div class="container" id="documents_table" style="padding:20px 0; font-size:8px;">
+          <table class="table table-bordered table-striped">
+            <thead>
+              <tr><th>#</th><th>解決すべき課題</th><th>支援目標</th><th>分類</th><th>データ作成日時</th></tr>
+            </thead>
+            <tbody id="documents_table_tbody">
+            </tbody>
+          </table>
+          <div id="documents_nav"></div>
+          <form>
+            <input type="button" class="btn btn-warning" value="選択したデータを削除" onClick="deleteSelected();"/>
+            <!--
+            <input type="button" class="btn btn-success" value="再学習" onClick="training();"/>
+          -->
+            <button class="btn btn-default" onClick="training();">再学習<img src="/imgs/watson.png" width="24" height="24"/></button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal bd-example-modal-lg fade" id="myModal" tabindex="-1" role="dialog" aria-labbelledby="myModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 class="modal-title" id="myModalLabel">問い合わせ結果</h4>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <h5 style="text-align: center;" id="class_name">コミュニケーション</h5>
+          <ul id="task_list" class="list-group">
+          </ul>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

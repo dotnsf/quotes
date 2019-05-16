@@ -1,0 +1,22 @@
+{
+    "name": "quotes",
+    "version": "0.0.1",
+    "scripts": {
+        "start": "node app.js"
+    },
+    "dependencies": {
+        "@cloudant/cloudant": "^2.0.1",
+        "basic-auth-connect": "1.0.x",
+        "body-parser": "~1.18.x",
+        "cfenv": "^1.2.2",
+        "ejs": "^2.3.4",
+        "express": "^4.16.4",
+        "multer": "1.1.x",
+        "uuid": "3.3.0",
+        "watson-developer-cloud": "^3.13.0"
+    },
+    "repository": {},
+    "engines": {
+        "node": "6.x"
+    }
+}
