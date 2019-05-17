@@ -34,6 +34,14 @@
       }
     });
 
+    $( '#textForm').submit( function(){
+      var text = $('#text').val();
+      if( text ){
+        classify( text );
+      }
+      return false;
+    });
+
     $( '#myModal').on( 'hidden.bs.modal', function(){
       $('.li_selected').each( function( index, element ){
         var text = $(element).text();
@@ -285,6 +293,7 @@
             console.log( 'POST /classify' );
             //console.log( data.classes );  //. [ { class_name: 'class_name', confidence: 0.98 }, { .. }, .. ]
             if( data.classes.length > 0 ){
+              var quote_texts = [];
               data.classes.forEach( function( top ){
                 var top_class_name = top.class_name;  //. 'category'
                 var top_confidence = top.confidence;  //. 0.9814..
@@ -373,6 +382,8 @@
           console.log( errorThrown );
         }
       });
+
+      $('#myModal').modal( 'show' );
     }else{
       //. 希望未入力
     }
@@ -431,7 +442,7 @@
 
     <div class="tab-content">
       <div id="tab1" class="tab-pane active">
-        <div style="width: 90%; top: 50px;">
+        <div style="margin: 20px;">
           <form id="textForm">
           <input type="text" class="form-control" placeholder="悩み、、" id="text"/>
           </form>

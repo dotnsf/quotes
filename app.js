@@ -186,7 +186,7 @@ app.get( '/query', function( req, res ){   //. カテゴリー検索
   var subcategory = req.query.subcategory ? req.query.subcategory : '';      //. 名言
   var limit = req.query.limit ? parseInt( req.query.limit ) : 0;
   var offset = req.query.offset ? parseInt( req.query.offset ) : 0;
-  console.log( 'GET /query?category=' + category + '&quote=' + quote + '&target=' + target + '&limit=' + limit + '&offset=' + offset );
+  console.log( 'GET /query?category=' + category + '&subcategory=' + subcategory + '&limit=' + limit + '&offset=' + offset );
 
   if( db ){
     if( category ){
